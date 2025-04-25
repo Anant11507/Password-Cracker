@@ -1,116 +1,121 @@
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
 import java.io.*;
+import java.util.Scanner;
 
 public class Password5 {
-    static final String ZIP_FILE = "protected5.zip";//orginal zip file to crack password
-    static final int numThreads = 6;//number thread i use
+    static final String ZIP_FILE = "protected5.zip";//file to crack password
     static volatile boolean found = false;//flag if password found
     static String correctPassword = null;//stores found password
-
+    static int numThreads;//i have to enter how many thread i want to use (6 thread)
+    /**
+     *main method to start program
+     */
     public static void main(String[] args) throws Exception {
-        long startTime = System.currentTimeMillis();//start time
-        //creat and start treads
-        Thread[] threads = new Thread[numThreads];
-        int lettersPerThread = 26 / numThreads;//divide 26 letters among thread
+        Scanner s = new Scanner(System.in);
+        System.out.print("Enter number of threads: ");
+        numThreads = s.nextInt();  // ask user for thread count
 
+        long startTime = System.currentTimeMillis();//start time
+        //create and start threads
+        Thread[] threads = new Thread[numThreads];
+        int lettersPerThread = 26 / numThreads;//divide 26 letters in thread
+        //loop through threads and assign each one a range fo letter
         for (int i = 0; i < numThreads; i++) {
-            //assign a range of starting letters to each thread
             char startChar = (char) ('a' + i * lettersPerThread);
-            char endChar = (i == numThreads - 1) ? 'z' : (char) (startChar + lettersPerThread - 1);//created with help from deepseek
-            threads[i] = new Thread(new CrackTask(startChar, endChar, i));//create thread
-            threads[i].start();//start thread
+            char endChar = (i == numThreads - 1) ? 'z' : (char) (startChar + lettersPerThread - 1);//created with help of deepseek
+            threads[i] = new Thread(new CrackTask(startChar, endChar, i));
+            threads[i].start();//start each thread
         }
-        //wait for all threads
+        //wait for all threads to finish
         for (Thread t : threads) {
             t.join();
         }
 
-        long endTime = System.currentTimeMillis();//stop timer
-        //print results
+        long endTime = System.currentTimeMillis();//stop time to measure total time taken
+        //display results
         if (found) {
             System.out.println("Password found: " + correctPassword);
         } else {
             System.out.println("Password not found.");
         }
-
+        //show haw long the cracking take
         System.out.println("Total time: " + (endTime - startTime) + " ms");
     }
     /**
-    * this class runs inside each thread to try different password combinations
-    */
+     * cracktask is the task that each threaad will run
+     * it tries different passwords based on the range of letters assigned to it
+     */
     static class CrackTask implements Runnable {
-        char startChar, endChar;//character range for this thread
-        int threadId;//thread number
-
+        char startChar, endChar;//range of letters this thread will try
+        int threadId;//unique id for this thread
+        /**
+         * constructor to initialize the range of charactersa nd thread id
+         * @param start staring letter for this thread range
+         * @param end ending letter for this thread range
+         * @param id unique id for the thread
+         */
         CrackTask(char start, char end, int id) {
             this.startChar = start;
             this.endChar = end;
             this.threadId = id;
         }
-
+        /**
+         * this method runs the thread task which is copying zip file and trying passwords
+         */
         public void run() {
-            String zipCopy = "copy" + threadId + ".zip";//copy of zip
-            String outputDir = "output" + threadId;//folder to ectract zip contents
-
-            //make a copy of the zip file for this thread//Took help form AI
+            String zipCopy = "copy" + threadId + ".zip";//create a copy of zip file
+            String outputDir = "output" + threadId;//folder for extrcting zip contents
+            //make copy of zip file for this thread//took help from AI
             if (!copyZipFile(ZIP_FILE, zipCopy)) {
                 System.out.println("Thread " + threadId + ": failed to copy zip file.");
                 return;
             }
-
-            //try all possible password starting with letters in this thread range
+            //try passwords within range assigned to this thread
             for (char c = startChar; c <= endChar; c++) {
                 tryPasswordRecursive("" + c, 5, zipCopy, outputDir);
-                if (found) break;
+                if (found) break;//stop if password is found
             }
-
-             //Clean up created files and folders
-            //Took help form AI and TA also guide me in this part
-            deleteFile(zipCopy);//created with chatgpt
+            //clean created files and folders after finishing//took help from AI and TA also help me in lab 
+            deleteFile(zipCopy);
             deleteDirectory(new File(outputDir));//created with chatgpt
         }
-
         /**
-         * this method tries all 5 letter lowercase password starting with given prefix
-         * @param prefix current guess (e.g. a, ab, so on)
-         * @param length final password length is always 5
-         * @param zipCopy thread's copy zip file
-         * @param outputDir folder to extract files 
+         * this method tries all 5 letter lowercasw passwords starting with the given prefix
+         * it does recursively by adding one letter at a time
+         * @param prefix current guess
+         * @param length length of password which is 5 to be
+         * @param zipCopy path to the thread zip file copy
+         * @param outputDir directory for extracted file
          */
-        //recursion was created with chatgpt
         void tryPasswordRecursive(String prefix, int length, String zipCopy, String outputDir) {
-            if (found) return;//if found it then stop
+            if (found) return;//stop if password is already found
 
-            if (prefix.length() == length) {
-                //if password is 5 character then try it
+            if (prefix.length() == length) {//if password is 5 character then try it
                 try {
                     ZipFile zipFile = new ZipFile(zipCopy);
-                    zipFile.setPassword(prefix);//try this password
-                    zipFile.extractAll(outputDir);//try to unzip 
-                   //if no error then password is correct
-                    found = true;
+                    zipFile.setPassword(prefix);////try this password
+                    zipFile.extractAll(outputDir);//attempt to extract files
+                    found = true;//if no error occers then password is correct
                     correctPassword = prefix;
-                    System.out.println("Thread " + threadId + " found password: " + prefix);
                 } catch (ZipException e) {
-                    // incorrect password, do nothing
+                    // incorrect password
                 }
                 return;
             }
-            //addd next character and try again
+            //add next letters and continue checking
             for (char c = 'a'; c <= 'z'; c++) {
-                if (found) return;
+                if (found) return;//stop if password is found
                 tryPasswordRecursive(prefix + c, length, zipCopy, outputDir);
             }
         }
         /**
-         * make a copy of the zip files for the thread
-         * @param src orginal zip file name
-         * @param dest new file name to creat
-         * @return true if successful
+         * this method copies zip files to a new location for this thread
+         * @param src path to orginal zip file
+         * @param dest path for new copide zip file
+         * @return true if successfull otherwise false
          */
-        
-        boolean copyZipFile(String src, String dest) {/*creted with help from chatgpt */
+        boolean copyZipFile(String src, String dest) {//created with help from chatgpt
             try {
                 FileInputStream fis = new FileInputStream(src);
                 FileOutputStream fos = new FileOutputStream(dest);
@@ -121,26 +126,25 @@ public class Password5 {
                 }
                 fis.close();
                 fos.close();
-                return true;
+                return true;//return true when file copy is successful
             } catch (IOException e) {
-                return false;
+                return false;//return false if error occured during file copy
             }
         }
         /**
          * delete single file
-         * @param filename name of file to delelte
+         * @param filename name of file to delete
          */
-
-        void deleteFile(String filename) {//creted with chatgpt
+        //took help form chatgpt
+        void deleteFile(String filename) {
             File file = new File(filename);
-            if (file.exists()) file.delete();
+            if (file.exists()) file.delete();//delete file if it exists
         }
         /**
-         * deletes folder and all files inside it
-         * @param dir the folder to delete
+         * deletes directory and all files inside it
+         * @param dir directory to delete
          */
-
-        void deleteDirectory(File dir) {//created with chatgpt te whole method
+        void deleteDirectory(File dir) {//this method has been created help of chatgpt
             if (dir.exists()) {
                 File[] files = dir.listFiles();
                 if (files != null) {
@@ -152,7 +156,7 @@ public class Password5 {
                         }
                     }
                 }
-                dir.delete();// delete main folder
+                dir.delete();//delete main folder
             }
         }
     }
