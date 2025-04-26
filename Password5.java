@@ -1,163 +1,139 @@
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
 import java.io.*;
-import java.util.Scanner;
+import java.util.*;
 
 public class Password5 {
-    static final String ZIP_FILE = "protected5.zip";//file to crack password
-    static volatile boolean found = false;//flag if password found
-    static String correctPassword = null;//stores found password
-    static int numThreads;//i have to enter how many thread i want to use (6 thread)
-    /**
-     *main method to start program
-     */
+    static boolean found = false;//if found password then stop other thread
+    static String correctpassword = "";//store correct password if found
+
     public static void main(String[] args) throws Exception {
-        Scanner s = new Scanner(System.in);
-        System.out.print("Enter number of threads: ");
-        numThreads = s.nextInt();  // ask user for thread count
+        Scanner sc = new Scanner(System.in);
+        System.out.print("Number of threads:");
+        int thcount = sc.nextInt();//give how many thread to use (6 thread i use)
 
-        long startTime = System.currentTimeMillis();//start time
-        //create and start threads
-        Thread[] threads = new Thread[numThreads];
-        int lettersPerThread = 26 / numThreads;//divide 26 letters in thread
-        //loop through threads and assign each one a range fo letter
-        for (int i = 0; i < numThreads; i++) {
-            char startChar = (char) ('a' + i * lettersPerThread);
-            char endChar = (i == numThreads - 1) ? 'z' : (char) (startChar + lettersPerThread - 1);//created with help of deepseek
-            threads[i] = new Thread(new CrackTask(startChar, endChar, i));
-            threads[i].start();//start each thread
+        long startTime = System.currentTimeMillis();//time start of password cracking
+
+        Thread[] th = new Thread[thcount];//create arraya of thread
+        int lettersPerThread = 26 / thcount;//26 letters divide to different thread
+        //loop to start each thread 
+        for (int i = 0; i < thcount; i++) {//start each thread to guesss letter from aaaaa to zzzzz
+            char startChar = (char) ('a' + i * lettersPerThread);//starting letter for each thread
+            char endChar; //ending letter for each thread
+            if (i == thcount - 1) {
+                endChar = 'z';
+            } else {
+                endChar = (char) (startChar + lettersPerThread - 1);//calculating ending letter for this thread
+
+            }
+            //make object that try password for this threaad
+            PasswordCracker cracker = new PasswordCracker(startChar, endChar, i);
+            th[i] = new Thread(cracker);//put that object inside thread
+            th[i].start();//start thread
         }
-        //wait for all threads to finish
-        for (Thread t : threads) {
-            t.join();
+        //wait for all threaad to finish
+        for (int i = 0; i < thcount; i++) {
+            th[i].join();//wait for each thread
         }
 
-        long endTime = System.currentTimeMillis();//stop time to measure total time taken
-        //display results
-        if (found) {
-            System.out.println("Password found: " + correctPassword);
-        } else {
-            System.out.println("Password not found.");
-        }
-        //show haw long the cracking take
-        System.out.println("Total time: " + (endTime - startTime) + " ms");
+        long endTime = System.currentTimeMillis();//record the end time
+
+        System.out.println("Password found: " + correctpassword);//show correct password after finding
+        System.out.println("Total time to find password is " + (endTime - startTime) + " ms");//show how much time it takes
     }
     /**
-     * cracktask is the task that each threaad will run
-     * it tries different passwords based on the range of letters assigned to it
+     * this class is for each thread that tries cracking password
      */
-    static class CrackTask implements Runnable {
-        char startChar, endChar;//range of letters this thread will try
-        int threadId;//unique id for this thread
-        /**
-         * constructor to initialize the range of charactersa nd thread id
-         * @param start staring letter for this thread range
-         * @param end ending letter for this thread range
-         * @param id unique id for the thread
-         */
-        CrackTask(char start, char end, int id) {
-            this.startChar = start;
-            this.endChar = end;
-            this.threadId = id;
+    static class PasswordCracker implements Runnable {
+        char startChar;//starting letter for this thread range
+        char endChar;//ending letter for this thread range
+        int threadId;//id for thread
+
+        PasswordCracker(char start, char end, int id) {
+            this.startChar = start;//set start character
+            this.endChar = end;//set end character
+            this.threadId = id;//set thread id
         }
-        /**
-         * this method runs the thread task which is copying zip file and trying passwords
-         */
+
         public void run() {
-            String zipCopy = "copy" + threadId + ".zip";//create a copy of zip file
-            String outputDir = "output" + threadId;//folder for extrcting zip contents
-            //make copy of zip file for this thread//took help from AI
-            if (!copyZipFile(ZIP_FILE, zipCopy)) {
-                System.out.println("Thread " + threadId + ": failed to copy zip file.");
-                return;
-            }
-            //try passwords within range assigned to this thread
+            String zipcopy = "copy" + threadId + ".zip";//creat copy of the file for thread
+            String contentdir = "extracted_contents" + threadId;//directory extracting files
+
+            copyFile("protected5.zip", zipcopy);//copy orgial file to this thread file
+            //try password from current range assigned to this thread
             for (char c = startChar; c <= endChar; c++) {
-                tryPasswordRecursive("" + c, 5, zipCopy, outputDir);
-                if (found) break;//stop if password is found
+                tryPasswords("" + c, zipcopy, contentdir);//try each letter as start of the password
+                if (found) break;//stop if correct password is found
             }
-            //clean created files and folders after finishing//took help from AI and TA also help me in lab 
-            deleteFile(zipCopy);
-            deleteDirectory(new File(outputDir));//created with chatgpt
+
+            deleteFile(zipcopy);//delete this thread zip copy
+            deleteFolder(new File(contentdir));//delete extracted files after use
+            /**
+             * this method tries different password gusses of 5 letter
+             */
         }
-        /**
-         * this method tries all 5 letter lowercasw passwords starting with the given prefix
-         * it does recursively by adding one letter at a time
-         * @param prefix current guess
-         * @param length length of password which is 5 to be
-         * @param zipCopy path to the thread zip file copy
-         * @param outputDir directory for extracted file
-         */
-        void tryPasswordRecursive(String prefix, int length, String zipCopy, String outputDir) {
+        //took help from AI
+        void tryPasswords(String guess, String zipPath, String outDir) {
             if (found) return;//stop if password is already found
 
-            if (prefix.length() == length) {//if password is 5 character then try it
+            if (guess.length() == 5) {//if the password is 5 letter long then try
                 try {
-                    ZipFile zipFile = new ZipFile(zipCopy);
-                    zipFile.setPassword(prefix);////try this password
-                    zipFile.extractAll(outputDir);//attempt to extract files
-                    found = true;//if no error occers then password is correct
-                    correctPassword = prefix;
-                } catch (ZipException e) {
-                    // incorrect password
+                    ZipFile zfile = new ZipFile(zipPath);//open zip file
+                    zfile.setPassword(guess);//set guess password
+                    zfile.extractAll(outDir);//try to extract files using guess
+                    found = true;//if there is no error then password is correct
+                    correctpassword = guess;//store correct password
+                } catch (ZipException e) {//if password is wrong then error come here but i ignoe it
+                    
                 }
-                return;
+                return;//return after trying password
             }
-            //add next letters and continue checking
+            //if thr password is not 5 letters then add one more letter and try again
             for (char c = 'a'; c <= 'z'; c++) {
-                if (found) return;//stop if password is found
-                tryPasswordRecursive(prefix + c, length, zipCopy, outputDir);
-            }
-        }
-        /**
-         * this method copies zip files to a new location for this thread
-         * @param src path to orginal zip file
-         * @param dest path for new copide zip file
-         * @return true if successfull otherwise false
+                if (found) return;
+                tryPasswords(guess + c, zipPath, outDir);
+            }}
+         /*
+         * this method copies file to new location
          */
-        boolean copyZipFile(String src, String dest) {//created with help from chatgpt
+        //Took help from chatgpt
+        void copyFile(String source, String dest) {
             try {
-                FileInputStream fis = new FileInputStream(src);
-                FileOutputStream fos = new FileOutputStream(dest);
-                byte[] buffer = new byte[1024];
-                int length;
-                while ((length = fis.read(buffer)) > 0) {
-                    fos.write(buffer, 0, length);
+                FileInputStream fis = new FileInputStream(source);//open source zip file
+                FileOutputStream fos = new FileOutputStream(dest);//create new file for copy
+                byte[] buffer = new byte[1024];//buffer for coping data
+                int len;
+                while ((len = fis.read(buffer)) > 0) {//read and copy file
+                    fos.write(buffer, 0, len);
                 }
                 fis.close();
                 fos.close();
-                return true;//return true when file copy is successful
             } catch (IOException e) {
-                return false;//return false if error occured during file copy
+                System.out.println("Error copying file");//print error message ifcoping fails
+            }}
+        /*
+         * this method deletes single file 
+         * Created from chatgpt
+         */
+        void deleteFile(String name) {
+            File file = new File(name);
+            if (file.exists()) {
+                file.delete();
             }
         }
-        /**
-         * delete single file
-         * @param filename name of file to delete
+        /*
+         * this method delets folder and its contents
          */
-        //took help form chatgpt
-        void deleteFile(String filename) {
-            File file = new File(filename);
-            if (file.exists()) file.delete();//delete file if it exists
-        }
-        /**
-         * deletes directory and all files inside it
-         * @param dir directory to delete
-         */
-        void deleteDirectory(File dir) {//this method has been created help of chatgpt
-            if (dir.exists()) {
-                File[] files = dir.listFiles();
-                if (files != null) {
-                    for (File f : files) {
-                        if (f.isDirectory()) {
-                            deleteDirectory(f);//delete subfolder
-                        } else {
-                            f.delete();//delete file
-                        }
-                    }
-                }
-                dir.delete();//delete main folder
-            }
-        }
-    }
-}
+        //Took help from chatgpt
+        void deleteFolder(File folder) {
+            if (folder.exists()) {
+            File[] files = folder.listFiles();//list all files in folder
+            if (files != null) {
+            for (File f : files) {
+             if (f.isDirectory()) {
+             deleteFolder(f);//delete recursively
+            } else {
+            f.delete();//if its file then delete
+             }}}
+                folder.delete();//delete folder itself
+            }}}}
