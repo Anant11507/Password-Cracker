@@ -1,7 +1,9 @@
+//three thread takes 28183 ms
+//four thread takes 3567131 ms
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
 import java.io.*;
-import java.util.*;
+import java.util.Scanner;
 
 public class Password5 {
     static boolean found = false;//if found password then stop other thread
@@ -11,13 +13,11 @@ public class Password5 {
         Scanner sc = new Scanner(System.in);
         System.out.print("Number of threads:");
         int thcount = sc.nextInt();//give how many thread to use (6 thread i use)
-
         long startTime = System.currentTimeMillis();//time start of password cracking
-
         Thread[] th = new Thread[thcount];//create arraya of thread
         int lettersPerThread = 26 / thcount;//26 letters divide to different thread
         //loop to start each thread 
-        for (int i = 0; i < thcount; i++) {//start each thread to guesss letter from aaaaa to zzzzz
+        for (int i = 0; i < thcount; i++) {//start each thread to guesss letter from a to z
             char startChar = (char) ('a' + i * lettersPerThread);//starting letter for each thread
             char endChar; //ending letter for each thread
             if (i == thcount - 1) {
@@ -54,7 +54,6 @@ public class Password5 {
             this.endChar = end;//set end character
             this.threadId = id;//set thread id
         }
-
         public void run() {
             String zipcopy = "copy" + threadId + ".zip";//creat copy of the file for thread
             String contentdir = "extracted_contents" + threadId;//directory extracting files
@@ -68,57 +67,65 @@ public class Password5 {
 
             deleteFile(zipcopy);//delete this thread zip copy
             deleteFolder(new File(contentdir));//delete extracted files after use
-            /**
-             * this method tries different password gusses of 5 letter
-             */
-        }
-        //took help from AI
-        void tryPasswords(String guess, String zipPath, String outDir) {
-            if (found) return;//stop if password is already found
-
-            if (guess.length() == 5) {//if the password is 5 letter long then try
-                try {
-                    ZipFile zfile = new ZipFile(zipPath);//open zip file
-                    zfile.setPassword(guess);//set guess password
-                    zfile.extractAll(outDir);//try to extract files using guess
-                    found = true;//if there is no error then password is correct
-                    correctpassword = guess;//store correct password
-                } catch (ZipException e) {//if password is wrong then error come here but i ignoe it
-                    
                 }
-                return;//return after trying password
-            }
-            //if thr password is not 5 letters then add one more letter and try again
-            for (char c = 'a'; c <= 'z'; c++) {
-                if (found) return;
-                tryPasswords(guess + c, zipPath, outDir);
-            }}
-         /*
-         * this method copies file to new location
+        /**
+         * try all 5 letter combinations using loop
+         * @param firstChar start character
+         * @param zipPath path to zip file
+         * @param outDir where to extract file
          */
-        //Took help from chatgpt
-        void copyFile(String source, String dest) {
+        void tryPasswords(String firstChar, String zipPath, String outDir) {
+            if (found) return;
+        //use 5 nastedloops for each password
+            for (char c1 = firstChar.charAt(0); c1 <= 'z' && !found; c1++) {//first character
+            for (char c2 = 'a'; c2 <= 'z' && !found; c2++) {//second character
+            for (char c3 = 'a'; c3 <= 'z' && !found; c3++) {//third character
+            for (char c4 = 'a'; c4 <= 'z' && !found; c4++) {//fourth character
+            for (char c5 = 'a'; c5 <= 'z' && !found; c5++) {//fifth character
+                String guess = "" + c1 + c2 + c3 + c4 + c5;//passsword attempt
+                
             try {
-                FileInputStream fis = new FileInputStream(source);//open source zip file
-                FileOutputStream fos = new FileOutputStream(dest);//create new file for copy
-                byte[] buffer = new byte[1024];//buffer for coping data
-                int len;
-                while ((len = fis.read(buffer)) > 0) {//read and copy file
-                    fos.write(buffer, 0, len);
+                ZipFile zfile = new ZipFile(zipPath);
+                zfile.setPassword(guess);//try current passeord
+                zfile.extractAll(outDir);//when ther is no error then it is correct pasword
+                found = true;//stop other therad
+                correctpassword = guess;//save password
+                return;//exxit
+                } catch (ZipException e) {//catch wrong password and keep trying
+                    // incorrect password so keep trying
                 }
+            }}}}}
+        }
+        /**
+         * this method copies file to new location
+         * @param tofile orginal file path
+         * @param fromf copied file path 
+         */
+        void copyFile(String tofile, String fromf) {//took help from chatgpt for line 102-109
+            try {
+                // Open input and output streams
+                FileInputStream fis = new FileInputStream(tofile);//open zip file
+                FileOutputStream fos = new FileOutputStream(fromf);//creae new file 
+                int byteread;//temporary storage 
+                while ((byteread = fis.read()) != -1) {//read and write each byte
+                    fos.write(byteread);//write evey byte to new copy
+                }
+                
+                // Close file
                 fis.close();
                 fos.close();
+                
             } catch (IOException e) {
-                System.out.println("Error copying file");//print error message ifcoping fails
-            }}
+                System.out.println("Error copy file");//errror message
+            }
+        }
         /*
          * this method deletes single file 
-         * Created from chatgpt
          */
-        void deleteFile(String name) {
+        void deleteFile(String name) {//took help from chatgpt
             File file = new File(name);
             if (file.exists()) {
-                file.delete();
+            file.delete();
             }
         }
         /*
